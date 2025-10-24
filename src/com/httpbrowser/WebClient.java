@@ -1,33 +1,60 @@
 package com.httpbrowser;
 
 import javax.swing.*;
+import javax.swing.border.*;
 import java.awt.*;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.List;
 import javax.net.ssl.*;
 import java.security.cert.X509Certificate;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
 
 /**
- * Web Client - HTTP/HTTPS Client với GUI
+ * Web Client - HTTP/HTTPS Client với GUI - Enhanced Version
  */
 public class WebClient {
     private JPanel mainPanel;
     private JTextField urlField;
     private JComboBox<String> methodComboBox;
     private JButton sendButton;
+    private JButton clearButton;
     private JTextArea responseArea;
     private JTextArea headerArea;
     private JEditorPane htmlPane;
     private JLabel statusLabel;
+    private JLabel responseSizeLabel;
+    private JLabel responseTimeLabel;
     private JCheckBox renderHtmlCheckBox;
-    private JCheckBox httpsCheckBox;
+    private JCheckBox followRedirectsCheckBox;
     private JTabbedPane tabbedPane;
     private JTextArea postDataArea;
+    private JTextArea customHeadersArea;
+    private JComboBox<String> urlHistoryCombo;
+    private DefaultComboBoxModel<String> historyModel;
+    private List<String> urlHistory;
+    private JProgressBar progressBar;
+    
+    // Quick access URLs
+    private static final String[] POPULAR_URLS = {
+        "http://localhost:8080/",
+        "https://www.google.com",
+        "https://www.github.com",
+        "https://api.github.com",
+        "https://httpbin.org/get",
+        "https://jsonplaceholder.typicode.com/posts",
+        "https://www.wikipedia.org",
+        "https://stackoverflow.com"
+    };
     
     public WebClient() {
+        urlHistory = new ArrayList<>();
+        historyModel = new DefaultComboBoxModel<>();
         initializeUI();
         trustAllCertificates(); // For HTTPS testing
+        loadPopularUrls();
     }
     
     public JPanel getPanel() {
@@ -71,44 +98,102 @@ public class WebClient {
     private JPanel createTopPanel() {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
         
-        // URL input
-        JPanel urlPanel = new JPanel(new BorderLayout(5, 0));
-        urlPanel.add(new JLabel("🌐 URL:"), BorderLayout.WEST);
+        // URL input panel with history
+        JPanel urlPanel = new JPanel(new BorderLayout(5, 5));
+        
+        // URL label and field
+        JPanel urlInputPanel = new JPanel(new BorderLayout(5, 0));
+        urlInputPanel.add(new JLabel("🌐 URL:"), BorderLayout.WEST);
+        
         urlField = new JTextField("http://localhost:8080/");
         urlField.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        urlPanel.add(urlField, BorderLayout.CENTER);
+        urlField.setToolTipText("Nhập URL đầy đủ (http:// hoặc https://)");
+        urlInputPanel.add(urlField, BorderLayout.CENTER);
         
-        // Method selection and button
-        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        String[] methods = {"GET", "POST", "HEAD"};
+        // Quick URLs dropdown
+        JPanel quickPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        quickPanel.add(new JLabel("⚡ Quick:"));
+        urlHistoryCombo = new JComboBox<>(historyModel);
+        urlHistoryCombo.setPreferredSize(new Dimension(200, 25));
+        urlHistoryCombo.addActionListener(e -> {
+            String selected = (String) urlHistoryCombo.getSelectedItem();
+            if (selected != null && !selected.isEmpty()) {
+                urlField.setText(selected);
+            }
+        });
+        quickPanel.add(urlHistoryCombo);
+        urlInputPanel.add(quickPanel, BorderLayout.EAST);
+        
+        urlPanel.add(urlInputPanel, BorderLayout.NORTH);
+        
+        // Control panel - Method, buttons, options
+        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 5));
+        
+        String[] methods = {"GET", "POST", "HEAD", "PUT", "DELETE"};
         methodComboBox = new JComboBox<>(methods);
+        methodComboBox.setToolTipText("Chọn HTTP Method");
         controlPanel.add(new JLabel("Method:"));
         controlPanel.add(methodComboBox);
         
         sendButton = new JButton("🚀 Gửi yêu cầu");
         sendButton.setFont(new Font("Arial", Font.BOLD, 12));
+        sendButton.setBackground(new Color(0, 120, 215));
+        sendButton.setForeground(Color.WHITE);
+        sendButton.setFocusPainted(false);
+        sendButton.setToolTipText("Gửi HTTP request (hoặc nhấn Enter)");
         controlPanel.add(sendButton);
         
-        renderHtmlCheckBox = new JCheckBox("Render HTML", true);
+        clearButton = new JButton("🗑️ Clear");
+        clearButton.setToolTipText("Xóa tất cả dữ liệu");
+        clearButton.addActionListener(e -> clearAll());
+        controlPanel.add(clearButton);
+        
+        controlPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        
+        renderHtmlCheckBox = new JCheckBox("🎨 Render HTML", true);
+        renderHtmlCheckBox.setToolTipText("Hiển thị HTML được render");
         controlPanel.add(renderHtmlCheckBox);
         
-        httpsCheckBox = new JCheckBox("🔒 HTTPS", false);
-        controlPanel.add(httpsCheckBox);
+        followRedirectsCheckBox = new JCheckBox("↪️ Follow Redirects", true);
+        followRedirectsCheckBox.setToolTipText("Tự động follow HTTP redirects (3xx)");
+        controlPanel.add(followRedirectsCheckBox);
         
-        urlPanel.add(controlPanel, BorderLayout.EAST);
+        urlPanel.add(controlPanel, BorderLayout.CENTER);
         panel.add(urlPanel, BorderLayout.NORTH);
         
+        // Tabbed panel for POST data and Custom Headers
+        JTabbedPane inputTabs = new JTabbedPane();
+        
         // POST data panel
-        JPanel postPanel = new JPanel(new BorderLayout(5, 0));
-        postPanel.add(new JLabel("📝 POST Data (JSON/Form):"), BorderLayout.NORTH);
+        JPanel postPanel = new JPanel(new BorderLayout(5, 5));
         postDataArea = new JTextArea(3, 50);
-        postDataArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        postDataArea.setText("{\"message\": \"Hello from SimpleHttpBrowser\"}");
+        postDataArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        postDataArea.setText("{\"message\": \"Hello from SimpleHttpBrowser\", \"timestamp\": \"" + 
+                           LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + "\"}");
+        postDataArea.setLineWrap(true);
         JScrollPane postScroll = new JScrollPane(postDataArea);
         postPanel.add(postScroll, BorderLayout.CENTER);
-        postPanel.setBorder(BorderFactory.createEmptyBorder(5, 0, 0, 0));
+        inputTabs.addTab("📝 Request Body", postPanel);
         
-        panel.add(postPanel, BorderLayout.CENTER);
+        // Custom headers panel
+        JPanel headersPanel = new JPanel(new BorderLayout(5, 5));
+        customHeadersArea = new JTextArea(3, 50);
+        customHeadersArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        customHeadersArea.setText("# Custom Headers (format: Key: Value)\n# User-Agent: CustomBrowser/1.0\n# Authorization: Bearer token123");
+        customHeadersArea.setLineWrap(true);
+        JScrollPane headersScroll = new JScrollPane(customHeadersArea);
+        headersPanel.add(headersScroll, BorderLayout.CENTER);
+        inputTabs.addTab("🔧 Custom Headers", headersPanel);
+        
+        panel.add(inputTabs, BorderLayout.CENTER);
+        
+        // Progress bar
+        progressBar = new JProgressBar();
+        progressBar.setIndeterminate(false);
+        progressBar.setStringPainted(true);
+        progressBar.setString("Ready");
+        progressBar.setVisible(false);
+        panel.add(progressBar, BorderLayout.SOUTH);
         
         return panel;
     }
@@ -165,13 +250,56 @@ public class WebClient {
     }
     
     private JPanel createBottomPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
+        JPanel panel = new JPanel(new BorderLayout(5, 5));
+        panel.setBorder(BorderFactory.createEmptyBorder(3, 3, 3, 3));
         
+        // Status label
         statusLabel = new JLabel("✅ Sẵn sàng...");
-        statusLabel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        panel.add(statusLabel, BorderLayout.WEST);
+        statusLabel.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
+        panel.add(statusLabel, BorderLayout.CENTER);
+        
+        // Info panel - Response time and size
+        JPanel infoPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        
+        responseTimeLabel = new JLabel("⏱️ Time: 0ms");
+        responseTimeLabel.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
+        infoPanel.add(responseTimeLabel);
+        
+        responseSizeLabel = new JLabel("📦 Size: 0 bytes");
+        responseSizeLabel.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
+        infoPanel.add(responseSizeLabel);
+        
+        panel.add(infoPanel, BorderLayout.EAST);
         
         return panel;
+    }
+    
+    private void clearAll() {
+        responseArea.setText("");
+        headerArea.setText("");
+        htmlPane.setText("");
+        statusLabel.setText("✅ Cleared - Ready");
+        responseTimeLabel.setText("⏱️ Time: 0ms");
+        responseSizeLabel.setText("📦 Size: 0 bytes");
+    }
+    
+    private void loadPopularUrls() {
+        for (String url : POPULAR_URLS) {
+            historyModel.addElement(url);
+        }
+    }
+    
+    private void addToHistory(String url) {
+        if (!urlHistory.contains(url)) {
+            urlHistory.add(0, url);
+            historyModel.insertElementAt(url, 0);
+            
+            // Keep history limited
+            if (urlHistory.size() > 20) {
+                urlHistory.remove(urlHistory.size() - 1);
+                historyModel.removeElementAt(historyModel.getSize() - 1);
+            }
+        }
     }
     
     public void loadUrl(String url) {
@@ -188,14 +316,23 @@ public class WebClient {
             return;
         }
         
+        // Add to history
+        addToHistory(urlString);
+        
         // Disable button during request
         sendButton.setEnabled(false);
+        progressBar.setVisible(true);
+        progressBar.setIndeterminate(true);
+        progressBar.setString("Sending " + method + " request...");
         statusLabel.setText("⏳ Đang gửi yêu cầu " + method + "...");
         
         // Execute in background thread
         SwingWorker<HttpResponse, Void> worker = new SwingWorker<>() {
+            private long startTime;
+            
             @Override
             protected HttpResponse doInBackground() {
+                startTime = System.currentTimeMillis();
                 return executeRequest(urlString, method);
             }
             
@@ -203,14 +340,29 @@ public class WebClient {
             protected void done() {
                 try {
                     HttpResponse response = get();
+                    long responseTime = System.currentTimeMillis() - startTime;
+                    response.responseTime = responseTime;
+                    
                     displayResponse(response);
-                    statusLabel.setText("✅ Hoàn thành - " + response.statusCode + " " + response.statusMessage);
+                    
+                    String statusMsg = String.format("✅ Hoàn thành - %d %s", 
+                                                    response.statusCode, response.statusMessage);
+                    statusLabel.setText(statusMsg);
+                    responseTimeLabel.setText(String.format("⏱️ Time: %dms", responseTime));
+                    
+                    if (response.body != null) {
+                        responseSizeLabel.setText("📦 Size: " + formatBytes(response.body.length()));
+                    }
+                    
                 } catch (Exception e) {
                     String errorMsg = "❌ Lỗi: " + e.getMessage();
                     statusLabel.setText(errorMsg);
                     responseArea.setText(errorMsg + "\n\n" + getStackTraceAsString(e));
+                    progressBar.setString("Error");
                 } finally {
                     sendButton.setEnabled(true);
+                    progressBar.setIndeterminate(false);
+                    progressBar.setVisible(false);
                 }
             }
         };
@@ -230,19 +382,32 @@ public class WebClient {
             // Set request method
             connection.setRequestMethod(method);
             
-            // Set headers
-            connection.setRequestProperty("User-Agent", "SimpleHttpBrowser/1.0");
-            connection.setRequestProperty("Accept", "*/*");
-            connection.setConnectTimeout(10000);
-            connection.setReadTimeout(10000);
+            // Set default headers
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SimpleHttpBrowser/2.0");
+            connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
+            connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9,vi;q=0.8");
+            connection.setRequestProperty("Accept-Encoding", "gzip, deflate, br");
+            connection.setRequestProperty("Connection", "keep-alive");
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(15000);
             
-            // For POST requests
-            if ("POST".equals(method)) {
+            // Follow redirects
+            connection.setInstanceFollowRedirects(followRedirectsCheckBox.isSelected());
+            
+            // Parse and set custom headers
+            parseAndSetCustomHeaders(connection);
+            
+            // For POST, PUT, DELETE requests
+            if ("POST".equals(method) || "PUT".equals(method) || "DELETE".equals(method)) {
                 connection.setDoOutput(true);
-                connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                
+                // Set content type if not already set by custom headers
+                if (connection.getRequestProperty("Content-Type") == null) {
+                    connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                }
                 
                 String postData = postDataArea.getText().trim();
-                if (!postData.isEmpty()) {
+                if (!postData.isEmpty() && !postData.startsWith("#")) {
                     try (OutputStream os = connection.getOutputStream()) {
                         byte[] input = postData.getBytes("UTF-8");
                         os.write(input, 0, input.length);
@@ -264,8 +429,8 @@ public class WebClient {
             // Get content type
             response.contentType = connection.getContentType();
             
-            // Read response body (for GET and POST)
-            if ("GET".equals(method) || "POST".equals(method)) {
+            // Read response body (for all methods except HEAD)
+            if (!"HEAD".equals(method)) {
                 InputStream inputStream;
                 if (response.statusCode >= 200 && response.statusCode < 400) {
                     inputStream = connection.getInputStream();
@@ -274,10 +439,18 @@ public class WebClient {
                 }
                 
                 if (inputStream != null) {
+                    // Check if response is compressed
+                    String encoding = connection.getContentEncoding();
+                    if ("gzip".equalsIgnoreCase(encoding)) {
+                        inputStream = new java.util.zip.GZIPInputStream(inputStream);
+                    }
+                    
                     response.body = readInputStream(inputStream);
                     
                     // Analyze HTML content
-                    if (response.body != null) {
+                    if (response.body != null && 
+                        (response.contentType != null && 
+                         (response.contentType.contains("html") || response.contentType.contains("xml")))) {
                         response.htmlStats = analyzeHtml(response.body);
                     }
                 }
@@ -304,6 +477,31 @@ public class WebClient {
             }
         }
         return content.toString();
+    }
+    
+    private void parseAndSetCustomHeaders(HttpURLConnection connection) {
+        String headersText = customHeadersArea.getText();
+        if (headersText == null || headersText.trim().isEmpty()) {
+            return;
+        }
+        
+        String[] lines = headersText.split("\n");
+        for (String line : lines) {
+            line = line.trim();
+            // Skip comments and empty lines
+            if (line.isEmpty() || line.startsWith("#")) {
+                continue;
+            }
+            
+            int colonIndex = line.indexOf(":");
+            if (colonIndex > 0 && colonIndex < line.length() - 1) {
+                String key = line.substring(0, colonIndex).trim();
+                String value = line.substring(colonIndex + 1).trim();
+                if (!key.isEmpty() && !value.isEmpty()) {
+                    connection.setRequestProperty(key, value);
+                }
+            }
+        }
     }
     
     private HtmlStats analyzeHtml(String html) {
@@ -337,17 +535,22 @@ public class WebClient {
         
         // Status information
         info.append("═══════════════════════════════════════════════════════\n");
-        info.append("📊 THÔNG TIN PHẢN HỒI HTTP\n");
+        info.append("📊 THÔNG TIN PHẢN HỒI HTTP/HTTPS\n");
         info.append("═══════════════════════════════════════════════════════\n\n");
         
         info.append("🔐 Protocol: ").append(response.protocol).append("\n");
-        info.append("🔴 Mã trạng thái: ").append(response.statusCode).append(" ").append(response.statusMessage).append("\n");
+        info.append("🔴 Status Code: ").append(response.statusCode).append(" ").append(response.statusMessage).append("\n");
         info.append("📄 Content-Type: ").append(response.contentType != null ? response.contentType : "N/A").append("\n");
-        info.append("📏 Chiều dài nội dung: ");
+        
+        if (response.responseTime > 0) {
+            info.append("⏱️  Response Time: ").append(response.responseTime).append(" ms\n");
+        }
+        
+        info.append("📏 Content-Length: ");
         if (response.contentLength >= 0) {
             info.append(formatBytes(response.contentLength));
         } else if (response.body != null) {
-            info.append(formatBytes(response.body.length()));
+            info.append(formatBytes(response.body.length())).append(" (actual)");
         } else {
             info.append("Không xác định");
         }
@@ -358,10 +561,13 @@ public class WebClient {
             info.append("───────────────────────────────────────────────────────\n");
             info.append("📈 THỐNG KÊ HTML TAGS\n");
             info.append("───────────────────────────────────────────────────────\n\n");
-            info.append("  🔹 Thẻ <p>:    ").append(response.htmlStats.pTags).append("\n");
-            info.append("  🔹 Thẻ <div>:  ").append(response.htmlStats.divTags).append("\n");
-            info.append("  🔹 Thẻ <span>: ").append(response.htmlStats.spanTags).append("\n");
-            info.append("  🔹 Thẻ <img>:  ").append(response.htmlStats.imgTags).append("\n\n");
+            info.append(String.format("  🔹 Thẻ <p>:    %d\n", response.htmlStats.pTags));
+            info.append(String.format("  🔹 Thẻ <div>:  %d\n", response.htmlStats.divTags));
+            info.append(String.format("  🔹 Thẻ <span>: %d\n", response.htmlStats.spanTags));
+            info.append(String.format("  🔹 Thẻ <img>:  %d\n\n", response.htmlStats.imgTags));
+            int totalTags = response.htmlStats.pTags + response.htmlStats.divTags + 
+                           response.htmlStats.spanTags + response.htmlStats.imgTags;
+            info.append(String.format("  📊 Tổng tags: %d\n\n", totalTags));
         }
         
         // Body content
@@ -370,12 +576,23 @@ public class WebClient {
             info.append("📄 NỘI DUNG PHẢN HỒI\n");
             info.append("───────────────────────────────────────────────────────\n\n");
             
+            // Pretty print JSON
+            String displayBody = response.body;
+            if (response.contentType != null && response.contentType.contains("json")) {
+                try {
+                    displayBody = prettyPrintJson(response.body);
+                } catch (Exception e) {
+                    // Keep original if formatting fails
+                }
+            }
+            
             // Limit display length
-            if (response.body.length() > 20000) {
-                info.append(response.body.substring(0, 20000));
-                info.append("\n\n... (Nội dung quá dài, chỉ hiển thị 20000 ký tự đầu) ...\n");
+            if (displayBody.length() > 30000) {
+                info.append(displayBody.substring(0, 30000));
+                info.append("\n\n... (Nội dung quá dài, chỉ hiển thị 30000 ký tự đầu) ...\n");
+                info.append("💡 Tổng độ dài: ").append(formatBytes(displayBody.length())).append("\n");
             } else {
-                info.append(response.body);
+                info.append(displayBody);
             }
         }
         
@@ -387,10 +604,68 @@ public class WebClient {
         
         // Render HTML if option is enabled
         if (renderHtmlCheckBox.isSelected() && response.body != null && !response.body.isEmpty()) {
-            renderHtml(response.body);
+            if (response.contentType != null && response.contentType.contains("html")) {
+                renderHtml(response.body);
+            } else {
+                htmlPane.setText("<html><body style='padding:20px;font-family:Arial;'>" +
+                               "<h2>Not HTML Content</h2>" +
+                               "<p>Content-Type: " + response.contentType + "</p>" +
+                               "<p>Chỉ HTML content mới được render.</p>" +
+                               "</body></html>");
+            }
         } else {
-            htmlPane.setText("<html><body style='padding:20px;font-family:Arial;'><h2>HTML Rendering</h2><p>Chọn checkbox 'Render HTML' và gửi lại yêu cầu để xem kết quả render.</p></body></html>");
+            htmlPane.setText("<html><body style='padding:20px;font-family:Arial;'>" +
+                           "<h2>HTML Rendering</h2>" +
+                           "<p>✅ Chọn checkbox 'Render HTML' để xem kết quả render.</p>" +
+                           "<p>📝 Chỉ áp dụng cho HTML content.</p>" +
+                           "</body></html>");
         }
+    }
+    
+    private String prettyPrintJson(String json) {
+        // Simple JSON pretty print
+        StringBuilder pretty = new StringBuilder();
+        int indent = 0;
+        boolean inString = false;
+        
+        for (int i = 0; i < json.length(); i++) {
+            char c = json.charAt(i);
+            
+            if (c == '"' && (i == 0 || json.charAt(i - 1) != '\\')) {
+                inString = !inString;
+                pretty.append(c);
+            } else if (!inString) {
+                switch (c) {
+                    case '{':
+                    case '[':
+                        pretty.append(c).append('\n');
+                        indent++;
+                        pretty.append("  ".repeat(indent));
+                        break;
+                    case '}':
+                    case ']':
+                        pretty.append('\n');
+                        indent--;
+                        pretty.append("  ".repeat(indent)).append(c);
+                        break;
+                    case ',':
+                        pretty.append(c).append('\n');
+                        pretty.append("  ".repeat(indent));
+                        break;
+                    case ':':
+                        pretty.append(c).append(' ');
+                        break;
+                    default:
+                        if (!Character.isWhitespace(c)) {
+                            pretty.append(c);
+                        }
+                }
+            } else {
+                pretty.append(c);
+            }
+        }
+        
+        return pretty.toString();
     }
     
     private void displayHeaders(HttpResponse response) {
@@ -474,6 +749,7 @@ public class WebClient {
         HtmlStats htmlStats;
         String error;
         Exception exception;
+        long responseTime;
     }
     
     static class HtmlStats {
