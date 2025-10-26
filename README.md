@@ -3,7 +3,7 @@
 **Ứng dụng trình duyệt HTTP/HTTPS hoàn chỉnh với Web Client và Web Server tích hợp**
 
 ## ✨ Tính năng chính (NEW!)
-
+![Web Browser](img/Web-browser.png)
 ### 🖥️ **Web Client - Enhanced**
 - ✅ Hỗ trợ đầy đủ **HTTP** và **HTTPS** 
 - ✅ **5 phương thức**: **GET**, **POST**, **HEAD**, **PUT**, **DELETE**
