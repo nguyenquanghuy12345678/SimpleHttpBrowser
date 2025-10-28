@@ -1,23 +1,28 @@
-# 🌐 Simple HTTP Browser - Enhanced Edition
+# 🌐 Simple HTTP Browser - Complete Edition v3.2
 
 **Ứng dụng trình duyệt HTTP/HTTPS hoàn chỉnh với Web Client và Web Server tích hợp**
 
-## ✨ Tính năng chính (NEW!)
-![Web Browser](img/Web-browser.png)
-### 🖥️ **Web Client - Enhanced**
+## ✨ Tính năng chính
+
+### 🖥️ **Web Client - COMPLETE EDITION v3.2** 🎉
 - ✅ Hỗ trợ đầy đủ **HTTP** và **HTTPS** 
 - ✅ **5 phương thức**: **GET**, **POST**, **HEAD**, **PUT**, **DELETE**
 - ✅ 🎨 **Giao diện đẹp mắt** với màu sắc và icons
 - ✅ ⚡ **Quick URLs** dropdown với popular websites
 - ✅ 📜 **URL History** - tự động lưu 20 URL gần nhất
 - ✅ 🔧 **Custom Headers** - thêm headers tùy chỉnh
+- ✅ 🍪 **Cookie Management** - tự động lưu và gửi cookies (NEW!)
+- ✅ ⏱️ **Configurable Timeout** - 5 đến 60 giây (NEW!)
+- ✅ 💾 **Save to File** - lưu response vào file (NEW!)
+- ✅ 📋 **Copy to Clipboard** - copy Body/Headers/All (NEW!)
 - ✅ ↪️ **Follow Redirects** - tự động theo HTTP 3xx redirects
 - ✅ 📦 **GZIP Support** - tự động giải nén nội dung GZIP
 - ✅ ⏱️ **Response Time** tracking - đo thời gian phản hồi
 - ✅ 📊 **Real-time Progress Bar**
 - ✅ 🎯 **JSON Pretty Print** - format JSON tự động
 - ✅ 🌐 **Universal Website Support** - kết nối được mọi website
-- ✅ � Thống kê HTML tags nâng cao
+- ✅ 📈 **HTML Statistics** - thống kê tags nâng cao
+- ✅ 🎨 **HTML Rendering** - với Base URL support
 - ✅ 🔄 **Clear All** function
 
 ### 🎯 Hiển thị chi tiết:
@@ -55,9 +60,10 @@
 ### Từ Eclipse/IDE:
 1. Mở project trong Eclipse
 2. Chạy file `SimpleHttpBrowser.java`
-3. Ứng dụng sẽ hiển thị 2 tabs:
-   - 🖥️ **Web Client**: Gửi HTTP requests
-   - 🖧 **Server Monitor**: Theo dõi server
+3. Ứng dụng sẽ hiển thị 3 tabs:
+   - 🌍 **Web Browser**: Trình duyệt web thực sự
+   - 🔧 **Advanced Client**: HTTP Client chuyên nghiệp
+   - 🖧 **Server Monitor**: Local test server
 
 ### Từ Command Line:
 
@@ -94,7 +100,44 @@ java -jar SimpleHttpBrowser.jar
 
 ## 📖 Hướng dẫn sử dụng
 
-### 🎯 Scenario 1: Test với Local Server
+### � **Tab 1: Web Browser** (NEW!)
+
+#### Browse website bất kỳ:
+```
+1. Nhập URL: www.google.com
+2. Nhấn Enter hoặc nút →
+3. Website load và render!
+4. Click links để navigate
+5. Dùng Back/Forward để điều hướng
+```
+
+#### Navigation buttons:
+```
+◀ Back    - Quay lại trang trước
+▶ Forward - Tiến tới trang sau
+🔄 Refresh - Reload trang hiện tại
+⏹ Stop    - Dừng loading
+🏠 Home    - Về trang chủ
+```
+
+#### Bookmarks:
+```
+1. Browse đến trang muốn save
+2. Click ⭐ hoặc Ctrl+D
+3. Nhập tên bookmark
+4. Chọn từ dropdown để quick access
+```
+
+#### Example: Browse Wikipedia
+```
+1. Chọn bookmark "Wikipedia"
+2. Hoặc nhập: www.wikipedia.org
+3. Click vào article
+4. Browse giữa các articles
+5. Dùng Back để quay lại
+```
+
+### 🔧 **Tab 2: Advanced Client**
 
 1. **Khởi động ứng dụng**
    - Server tự động start ở port 8080
@@ -396,30 +439,68 @@ java -jar SimpleHttpBrowser.jar
 2. Hoặc check ☑️ **HTTPS** checkbox
 3. Trust all certificates đã được enable
 
+## 🎉 Tính năng mới v3.2 - Complete Edition
+
+### 🍪 Cookie Management
+- ✅ Tự động lưu cookies từ server (`Set-Cookie` header)
+- ✅ Tự động gửi cookies trong request tiếp theo
+- ✅ Cookie store theo domain (domain-specific)
+- ✅ Enable/Disable qua checkbox "🍪 Use Cookies"
+
+### ⏱️ Configurable Timeout
+- ✅ Điều chỉnh timeout từ **5 đến 60 giây**
+- ✅ Default: 15 seconds
+- ✅ Spinner control dễ sử dụng
+- ✅ Áp dụng cho Connect và Read timeout
+
+### 💾 Save Response to File
+- ✅ Lưu response body vào file
+- ✅ Tự động đề xuất extension (.html, .json, .xml, .txt)
+- ✅ File chooser dialog
+- ✅ Thông báo thành công/lỗi
+
+### 📋 Copy to Clipboard
+- ✅ **Copy Response Body** - Chỉ copy body
+- ✅ **Copy Headers** - Chỉ copy headers
+- ✅ **Copy All** - Copy cả body và headers
+- ✅ Status notification
+
+### Các cải tiến khác
+- ✅ Better error handling
+- ✅ Enhanced UI với nhiều controls hơn
+- ✅ Smart file extension detection
+- ✅ Improved async operations
+
 ## 🔮 Mở rộng trong tương lai
 
-Có thể thêm (v3.0):
+Có thể thêm:
 - 🔧 PATCH method support
-- 🍪 Advanced Cookie management UI
-- 📜 Persistent history (save to file)
-- � Save/Export requests & responses
+- 🔐 HTTP Basic/Digest Authentication UI
+- 📜 Persistent history (save to database)
 - 🎨 Syntax highlighting cho JSON/XML
-- � OAuth 2.0 support
+- 🔑 OAuth 2.0 support
 - 🌐 Proxy settings UI
 - 📊 Response time charts/graphs
 - 🔒 Certificate viewer
 - 📱 WebSocket support
 - 🎯 Request templates
-- 📝 Request collections
+- 📝 Request collections (Postman-like)
 - 🔄 Batch requests
 - 📸 Screenshot HTML rendering
 - 🌙 Dark mode theme
+- 📤 Import/Export collections
 
 ---
 
 **Tạo bởi**: GitHub Copilot  
-**Version**: 2.0 Enhanced Edition  
+**Version**: 3.2 Complete Edition  
 **Ngày**: October 2025  
-**Features**: Full HTTP/HTTPS + 5 Methods + Custom Headers + History + Progress + Pretty Print + Universal Website Support
+**Features**: Full HTTP/HTTPS + 5 Methods + Custom Headers + Cookies + Timeout + Save/Copy + HTML Rendering + Complete Web Client
+
+**Xem thêm**:
+- 📖 [WEB_CLIENT_COMPLETE.md](WEB_CLIENT_COMPLETE.md) - Tài liệu đầy đủ về Web Client
+- 📖 [HTML_RENDERING_IMPROVEMENTS.md](HTML_RENDERING_IMPROVEMENTS.md) - Chi tiết HTML rendering
+- 📖 [WEB_BROWSER_GUIDE.md](WEB_BROWSER_GUIDE.md) - Hướng dẫn Web Browser
 
 **Enjoy coding! 🚀**
+

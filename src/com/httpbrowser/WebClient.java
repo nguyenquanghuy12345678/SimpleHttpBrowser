@@ -1,7 +1,6 @@
 package com.httpbrowser;
 
 import javax.swing.*;
-import javax.swing.border.*;
 import java.awt.*;
 import java.io.*;
 import java.net.*;
@@ -11,9 +10,12 @@ import javax.net.ssl.*;
 import java.security.cert.X509Certificate;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
+import java.awt.datatransfer.*;
+import java.awt.Toolkit;
 
 /**
- * Web Client - HTTP/HTTPS Client với GUI - Enhanced Version
+ * Web Client - HTTP/HTTPS Client với GUI - Full Featured Version
+ * Version 3.2 - Complete Edition
  */
 public class WebClient {
     private JPanel mainPanel;
@@ -21,6 +23,8 @@ public class WebClient {
     private JComboBox<String> methodComboBox;
     private JButton sendButton;
     private JButton clearButton;
+    private JButton saveButton;
+    private JButton copyButton;
     private JTextArea responseArea;
     private JTextArea headerArea;
     private JEditorPane htmlPane;
@@ -29,6 +33,7 @@ public class WebClient {
     private JLabel responseTimeLabel;
     private JCheckBox renderHtmlCheckBox;
     private JCheckBox followRedirectsCheckBox;
+    private JCheckBox useCookiesCheckBox;
     private JTabbedPane tabbedPane;
     private JTextArea postDataArea;
     private JTextArea customHeadersArea;
@@ -36,6 +41,11 @@ public class WebClient {
     private DefaultComboBoxModel<String> historyModel;
     private List<String> urlHistory;
     private JProgressBar progressBar;
+    private JSpinner timeoutSpinner;
+    
+    // Cookie storage
+    private Map<String, List<String>> cookieStore = new HashMap<>();
+    private HttpResponse lastResponse;
     
     // Quick access URLs
     private static final String[] POPULAR_URLS = {
@@ -52,6 +62,7 @@ public class WebClient {
     public WebClient() {
         urlHistory = new ArrayList<>();
         historyModel = new DefaultComboBoxModel<>();
+        cookieStore = new HashMap<>();
         initializeUI();
         trustAllCertificates(); // For HTTPS testing
         loadPopularUrls();
@@ -157,6 +168,35 @@ public class WebClient {
         followRedirectsCheckBox = new JCheckBox("↪️ Follow Redirects", true);
         followRedirectsCheckBox.setToolTipText("Tự động follow HTTP redirects (3xx)");
         controlPanel.add(followRedirectsCheckBox);
+        
+        useCookiesCheckBox = new JCheckBox("🍪 Use Cookies", true);
+        useCookiesCheckBox.setToolTipText("Tự động lưu và gửi cookies");
+        controlPanel.add(useCookiesCheckBox);
+        
+        controlPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        
+        // Timeout configuration
+        JLabel timeoutLabel = new JLabel("⏱️ Timeout:");
+        controlPanel.add(timeoutLabel);
+        
+        SpinnerNumberModel timeoutModel = new SpinnerNumberModel(15, 5, 60, 5);
+        timeoutSpinner = new JSpinner(timeoutModel);
+        timeoutSpinner.setPreferredSize(new Dimension(60, 25));
+        timeoutSpinner.setToolTipText("Timeout trong giây");
+        controlPanel.add(timeoutSpinner);
+        controlPanel.add(new JLabel("s"));
+        
+        controlPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        
+        saveButton = new JButton("💾 Save");
+        saveButton.setToolTipText("Lưu response vào file");
+        saveButton.addActionListener(e -> saveResponse());
+        controlPanel.add(saveButton);
+        
+        copyButton = new JButton("📋 Copy");
+        copyButton.setToolTipText("Copy response to clipboard");
+        copyButton.addActionListener(e -> copyToClipboard());
+        controlPanel.add(copyButton);
         
         urlPanel.add(controlPanel, BorderLayout.CENTER);
         panel.add(urlPanel, BorderLayout.NORTH);
@@ -281,6 +321,99 @@ public class WebClient {
         statusLabel.setText("✅ Cleared - Ready");
         responseTimeLabel.setText("⏱️ Time: 0ms");
         responseSizeLabel.setText("📦 Size: 0 bytes");
+        lastResponse = null;
+    }
+    
+    private void saveResponse() {
+        if (lastResponse == null || lastResponse.body == null) {
+            JOptionPane.showMessageDialog(mainPanel, 
+                "Không có response để lưu!", "Thông báo", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Lưu Response");
+        
+        // Suggest file extension based on content type
+        String extension = ".txt";
+        if (lastResponse.contentType != null) {
+            if (lastResponse.contentType.contains("html")) extension = ".html";
+            else if (lastResponse.contentType.contains("json")) extension = ".json";
+            else if (lastResponse.contentType.contains("xml")) extension = ".xml";
+        }
+        
+        fileChooser.setSelectedFile(new java.io.File("response" + extension));
+        
+        int result = fileChooser.showSaveDialog(mainPanel);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            try {
+                java.io.File file = fileChooser.getSelectedFile();
+                try (java.io.FileWriter writer = new java.io.FileWriter(file)) {
+                    writer.write(lastResponse.body);
+                }
+                JOptionPane.showMessageDialog(mainPanel, 
+                    "✅ Đã lưu response vào:\n" + file.getAbsolutePath(), 
+                    "Thành công", JOptionPane.INFORMATION_MESSAGE);
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(mainPanel, 
+                    "❌ Lỗi khi lưu file:\n" + ex.getMessage(), 
+                    "Lỗi", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+    
+    private void copyToClipboard() {
+        if (lastResponse == null || lastResponse.body == null) {
+            JOptionPane.showMessageDialog(mainPanel, 
+                "Không có response để copy!", "Thông báo", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        // Show dialog to choose what to copy
+        Object[] options = {"Response Body", "Headers", "All (Body + Headers)", "Cancel"};
+        int choice = JOptionPane.showOptionDialog(mainPanel,
+            "Chọn nội dung cần copy:",
+            "Copy to Clipboard",
+            JOptionPane.DEFAULT_OPTION,
+            JOptionPane.QUESTION_MESSAGE,
+            null,
+            options,
+            options[0]);
+        
+        String content = "";
+        switch (choice) {
+            case 0: // Response Body
+                content = lastResponse.body;
+                break;
+            case 1: // Headers
+                content = headerArea.getText();
+                break;
+            case 2: // All
+                content = "═══════════════════════════════════════════════════════\n";
+                content += "HEADERS:\n";
+                content += "═══════════════════════════════════════════════════════\n\n";
+                content += headerArea.getText();
+                content += "\n\n═══════════════════════════════════════════════════════\n";
+                content += "RESPONSE BODY:\n";
+                content += "═══════════════════════════════════════════════════════\n\n";
+                content += lastResponse.body;
+                break;
+            default:
+                return;
+        }
+        
+        if (!content.isEmpty()) {
+            StringSelection selection = new StringSelection(content);
+            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+            clipboard.setContents(selection, selection);
+            
+            statusLabel.setText("✅ Đã copy vào clipboard!");
+            
+            // Reset status after 3 seconds
+            javax.swing.Timer timer = new javax.swing.Timer(3000, e -> statusLabel.setText("✅ Sẵn sàng..."));
+            timer.setRepeats(false);
+            timer.start();
+        }
     }
     
     private void loadPopularUrls() {
@@ -382,17 +515,29 @@ public class WebClient {
             // Set request method
             connection.setRequestMethod(method);
             
+            // Get timeout from spinner (in seconds)
+            int timeoutSeconds = (Integer) timeoutSpinner.getValue();
+            int timeoutMs = timeoutSeconds * 1000;
+            
             // Set default headers
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SimpleHttpBrowser/2.0");
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SimpleHttpBrowser/3.2");
             connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
             connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9,vi;q=0.8");
             connection.setRequestProperty("Accept-Encoding", "gzip, deflate, br");
             connection.setRequestProperty("Connection", "keep-alive");
-            connection.setConnectTimeout(15000);
-            connection.setReadTimeout(15000);
+            connection.setConnectTimeout(timeoutMs);
+            connection.setReadTimeout(timeoutMs);
             
             // Follow redirects
             connection.setInstanceFollowRedirects(followRedirectsCheckBox.isSelected());
+            
+            // Add cookies if enabled
+            if (useCookiesCheckBox.isSelected()) {
+                String cookieHeader = getCookiesForUrl(urlString);
+                if (!cookieHeader.isEmpty()) {
+                    connection.setRequestProperty("Cookie", cookieHeader);
+                }
+            }
             
             // Parse and set custom headers
             parseAndSetCustomHeaders(connection);
@@ -422,6 +567,11 @@ public class WebClient {
             
             // Get headers
             response.headers = connection.getHeaderFields();
+            
+            // Store cookies if enabled
+            if (useCookiesCheckBox.isSelected()) {
+                storeCookiesFromResponse(urlString, response.headers);
+            }
             
             // Get content length
             response.contentLength = connection.getContentLength();
@@ -531,6 +681,9 @@ public class WebClient {
     }
     
     private void displayResponse(HttpResponse response) {
+        // Save response for later use (save/copy functions)
+        lastResponse = response;
+        
         StringBuilder info = new StringBuilder();
         
         // Status information
@@ -696,6 +849,19 @@ public class WebClient {
     
     private void renderHtml(String html) {
         try {
+            // Set base URL from current request URL for proper resource loading
+            String urlText = urlField.getText().trim();
+            if (!urlText.isEmpty()) {
+                try {
+                    URI uri = new URI(urlText);
+                    URL baseUrl = uri.toURL();
+                    ((javax.swing.text.html.HTMLDocument) htmlPane.getDocument()).setBase(baseUrl);
+                } catch (Exception e) {
+                    // Ignore if URL is invalid or document is not HTMLDocument
+                }
+            }
+            
+            htmlPane.setContentType("text/html; charset=UTF-8");
             htmlPane.setText(html);
             htmlPane.setCaretPosition(0);
         } catch (Exception e) {
@@ -734,6 +900,51 @@ public class WebClient {
             HttpsURLConnection.setDefaultHostnameVerifier(allHostsValid);
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+    
+    // Cookie management methods
+    private String getCookiesForUrl(String urlString) {
+        try {
+            URI uri = new URI(urlString);
+            String domain = uri.getHost();
+            
+            List<String> cookies = cookieStore.get(domain);
+            if (cookies != null && !cookies.isEmpty()) {
+                return String.join("; ", cookies);
+            }
+        } catch (Exception e) {
+            // Ignore invalid URLs
+        }
+        return "";
+    }
+    
+    private void storeCookiesFromResponse(String urlString, Map<String, List<String>> headers) {
+        if (headers == null) return;
+        
+        try {
+            URI uri = new URI(urlString);
+            String domain = uri.getHost();
+            
+            List<String> setCookieHeaders = headers.get("Set-Cookie");
+            if (setCookieHeaders != null && !setCookieHeaders.isEmpty()) {
+                List<String> cookies = cookieStore.computeIfAbsent(domain, k -> new ArrayList<>());
+                
+                for (String setCookie : setCookieHeaders) {
+                    // Extract cookie name=value (ignore attributes)
+                    String[] parts = setCookie.split(";");
+                    if (parts.length > 0) {
+                        String cookie = parts[0].trim();
+                        
+                        // Update or add cookie
+                        String cookieName = cookie.split("=")[0];
+                        cookies.removeIf(c -> c.startsWith(cookieName + "="));
+                        cookies.add(cookie);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Ignore errors in cookie processing
         }
     }
     

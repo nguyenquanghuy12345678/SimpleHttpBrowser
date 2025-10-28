@@ -20,17 +20,21 @@ public class SimpleHttpBrowser extends JFrame {
     }
     
     private void initializeUI() {
-        setTitle("🌐 Simple HTTP Browser - Client & Server");
-        setSize(1200, 800);
+        setTitle("🌐 Simple HTTP Browser - Full Web Browser & Client");
+        setSize(1400, 900);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         
         // Main tabbed pane
         mainTabbedPane = new JTabbedPane();
         
-        // Web Client Tab
+        // Web Browser Tab (NEW!)
+        WebBrowser webBrowser = new WebBrowser();
+        mainTabbedPane.addTab("🌍 Web Browser", webBrowser);
+        
+        // Web Client Tab (Advanced HTTP Client)
         webClient = new WebClient();
-        mainTabbedPane.addTab("🖥️ Web Client", webClient.getPanel());
+        mainTabbedPane.addTab("� Advanced Client", webClient.getPanel());
         
         // Server Monitor Tab
         JPanel serverPanel = createServerMonitorPanel();
@@ -137,8 +141,8 @@ public class SimpleHttpBrowser extends JFrame {
     }
     
     private void testLocalServer() {
-        mainTabbedPane.setSelectedIndex(0); // Switch to client tab
-        webClient.loadUrl("http://localhost:8080/");
+        mainTabbedPane.setSelectedIndex(0); // Switch to browser tab
+        // Web browser will auto-load home page
     }
     
     public static void main(String[] args) {
