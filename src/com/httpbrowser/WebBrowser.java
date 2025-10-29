@@ -2,15 +2,19 @@ package com.httpbrowser;
 
 import javax.swing.*;
 import javax.swing.event.*;
+import javax.swing.text.html.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.net.*;
 import java.util.*;
 import java.util.List;
 import java.io.*;
+import javax.net.ssl.*;
+import java.security.cert.X509Certificate;
 
 /**
  * Web Browser - Full-featured web browser với navigation, history, bookmarks
+ * Enhanced rendering for modern websites
  */
 public class WebBrowser extends JPanel {
     private JTextField addressBar;
@@ -46,6 +50,7 @@ public class WebBrowser extends JPanel {
         bookmarks = new ArrayList<>();
         bookmarksModel = new DefaultComboBoxModel<>();
         
+        trustAllCertificates(); // Enable HTTPS support
         initializeUI();
         loadDefaultBookmarks();
         navigateTo(homeUrl);
@@ -59,10 +64,37 @@ public class WebBrowser extends JPanel {
         JPanel navPanel = createNavigationPanel();
         add(navPanel, BorderLayout.NORTH);
         
-        // Center - Browser pane
+        // Center - Browser pane with enhanced rendering
         browserPane = new JEditorPane();
         browserPane.setEditable(false);
-        browserPane.setContentType("text/html");
+        
+        // Use HTMLEditorKit for better HTML support
+        HTMLEditorKit kit = new HTMLEditorKit();
+        browserPane.setEditorKit(kit);
+        
+        // Add custom CSS for better rendering
+        StyleSheet styleSheet = kit.getStyleSheet();
+        styleSheet.addRule("body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; margin: 10px; background-color: white; }");
+        styleSheet.addRule("h1 { font-size: 32px; font-weight: bold; margin: 20px 0 10px 0; color: #202124; }");
+        styleSheet.addRule("h2 { font-size: 24px; font-weight: bold; margin: 18px 0 10px 0; color: #202124; }");
+        styleSheet.addRule("h3 { font-size: 20px; font-weight: bold; margin: 16px 0 10px 0; color: #202124; }");
+        styleSheet.addRule("p { margin: 10px 0; line-height: 1.6; color: #3c4043; }");
+        styleSheet.addRule("a { color: #1a73e8; text-decoration: none; }");
+        styleSheet.addRule("a:hover { text-decoration: underline; }");
+        styleSheet.addRule("img { max-width: 100%; height: auto; }");
+        styleSheet.addRule("table { border-collapse: collapse; width: 100%; margin: 10px 0; }");
+        styleSheet.addRule("td, th { border: 1px solid #dadce0; padding: 8px; text-align: left; }");
+        styleSheet.addRule("th { background-color: #f1f3f4; font-weight: bold; }");
+        styleSheet.addRule("ul, ol { margin: 10px 0; padding-left: 40px; }");
+        styleSheet.addRule("li { margin: 5px 0; line-height: 1.6; }");
+        styleSheet.addRule("code { background-color: #f1f3f4; padding: 2px 6px; border-radius: 3px; font-family: 'Consolas', monospace; }");
+        styleSheet.addRule("pre { background-color: #f1f3f4; padding: 12px; border-radius: 4px; overflow-x: auto; }");
+        styleSheet.addRule("blockquote { border-left: 4px solid #dadce0; padding-left: 16px; margin: 10px 0; color: #5f6368; }");
+        styleSheet.addRule("hr { border: none; border-top: 1px solid #dadce0; margin: 20px 0; }");
+        styleSheet.addRule("div { margin: 5px 0; }");
+        styleSheet.addRule(".container { max-width: 1200px; margin: 0 auto; }");
+        
+        browserPane.setContentType("text/html; charset=UTF-8");
         
         // Handle hyperlink clicks
         browserPane.addHyperlinkListener(new HyperlinkListener() {
@@ -281,22 +313,53 @@ public class WebBrowser extends JPanel {
                         String content = get();
                         long loadTime = System.currentTimeMillis() - startTime;
                         
+                        // Debug: Check if content is empty
+                        if (content == null || content.trim().isEmpty()) {
+                            browserPane.setText("<html><body><h1>Error</h1><p>Received empty response from server.</p></body></html>");
+                            statusLabel.setText("❌ Empty response");
+                            return;
+                        }
+                        
                         // Set base URL for proper resource loading (images, CSS, etc.)
                         try {
                             if (pageUrl != null) {
-                                ((javax.swing.text.html.HTMLDocument) browserPane.getDocument()).setBase(pageUrl);
+                                ((HTMLDocument) browserPane.getDocument()).setBase(pageUrl);
                             }
                         } catch (Exception e) {
                             // Ignore if document is not HTMLDocument
                         }
                         
-                        // Set content
-                        browserPane.setContentType("text/html; charset=UTF-8");
-                        browserPane.setText(content);
-                        browserPane.setCaretPosition(0);
-                        
-                        statusLabel.setText(String.format("✅ Done - %dms - %s", 
-                                          loadTime, urlString));
+                        // Try to render HTML
+                        try {
+                            // First try: Clean and prepare HTML for better rendering
+                            String cleanHtml = prepareHtmlForRendering(content, urlString);
+                            
+                            // Set content type first
+                            browserPane.setContentType("text/html; charset=UTF-8");
+                            
+                            // Try to set the cleaned HTML
+                            if (cleanHtml != null && !cleanHtml.trim().isEmpty()) {
+                                browserPane.setText(cleanHtml);
+                                browserPane.setCaretPosition(0);
+                            } else {
+                                // Fallback: Use original content
+                                browserPane.setText(content);
+                                browserPane.setCaretPosition(0);
+                            }
+                            
+                            statusLabel.setText(String.format("✅ Done - %dms - %d bytes", 
+                                              loadTime, content.length()));
+                        } catch (Exception renderEx) {
+                            // Last resort: Show raw HTML or error
+                            try {
+                                browserPane.setContentType("text/plain");
+                                browserPane.setText("Failed to render HTML. Showing raw content:\n\n" + 
+                                                  content.substring(0, Math.min(content.length(), 10000)));
+                            } catch (Exception e2) {
+                                browserPane.setText("Error rendering page: " + renderEx.getMessage());
+                            }
+                            statusLabel.setText("⚠️ Rendering error - showing raw content");
+                        }
                     } else {
                         statusLabel.setText("⏹ Stopped");
                     }
@@ -324,14 +387,16 @@ public class WebBrowser extends JPanel {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
         connection.setRequestProperty("Accept", 
             "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
-        connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9");
+        connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9,vi;q=0.8");
         connection.setRequestProperty("Accept-Encoding", "gzip, deflate");
         connection.setRequestProperty("Connection", "keep-alive");
+        connection.setRequestProperty("Upgrade-Insecure-Requests", "1");
         connection.setConnectTimeout(20000);
         connection.setReadTimeout(20000);
         connection.setInstanceFollowRedirects(true);
         
         int responseCode = connection.getResponseCode();
+        System.out.println("Response code: " + responseCode); // Debug
         
         if (responseCode >= 200 && responseCode < 400) {
             InputStream inputStream = connection.getInputStream();
@@ -346,13 +411,22 @@ public class WebBrowser extends JPanel {
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(inputStream, "UTF-8"))) {
                 String line;
+                int lineCount = 0;
                 while ((line = reader.readLine()) != null) {
                     content.append(line).append("\n");
+                    lineCount++;
                 }
+                System.out.println("Fetched " + lineCount + " lines, " + content.length() + " bytes"); // Debug
             }
             
             connection.disconnect();
-            return content.toString();
+            
+            String result = content.toString();
+            if (result.trim().isEmpty()) {
+                throw new IOException("Server returned empty content");
+            }
+            
+            return result;
         } else {
             connection.disconnect();
             throw new IOException("HTTP Error: " + responseCode + " " + connection.getResponseMessage());
@@ -446,6 +520,118 @@ public class WebBrowser extends JPanel {
     private void updateNavigationButtons() {
         backButton.setEnabled(!backHistory.isEmpty());
         forwardButton.setEnabled(!forwardHistory.isEmpty());
+    }
+    
+    private void trustAllCertificates() {
+        try {
+            // Create a trust manager that accepts all certificates
+            TrustManager[] trustAllCerts = new TrustManager[]{
+                new X509TrustManager() {
+                    public X509Certificate[] getAcceptedIssuers() {
+                        return null;
+                    }
+                    public void checkClientTrusted(X509Certificate[] certs, String authType) {
+                    }
+                    public void checkServerTrusted(X509Certificate[] certs, String authType) {
+                    }
+                }
+            };
+            
+            // Install the all-trusting trust manager
+            SSLContext sc = SSLContext.getInstance("SSL");
+            sc.init(null, trustAllCerts, new java.security.SecureRandom());
+            HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
+            
+            // Create all-trusting hostname verifier
+            HostnameVerifier allHostsValid = new HostnameVerifier() {
+                public boolean verify(String hostname, SSLSession session) {
+                    return true;
+                }
+            };
+            
+            // Install the all-trusting hostname verifier
+            HttpsURLConnection.setDefaultHostnameVerifier(allHostsValid);
+        } catch (Exception e) {
+            System.err.println("Failed to setup SSL trust: " + e.getMessage());
+        }
+    }
+    
+    private String prepareHtmlForRendering(String html, String baseUrl) {
+        if (html == null || html.trim().isEmpty()) {
+            return "<html><body><p>Empty page</p></body></html>";
+        }
+        
+        try {
+            // Keep original for fallback
+            String original = html;
+            
+            // Remove problematic scripts (but keep content visible)
+            html = html.replaceAll("(?is)<script[^>]*>.*?</script>", "<!-- script removed -->");
+            html = html.replaceAll("(?is)<noscript[^>]*>.*?</noscript>", "");
+            
+            // Remove inline event handlers (but keep the element)
+            html = html.replaceAll("\\son\\w+\\s*=\\s*[\"'][^\"']*[\"']", "");
+            
+            // Keep basic inline styles, remove only complex <style> blocks
+            html = html.replaceAll("(?is)<style[^>]*>.*?@media.*?</style>", "<!-- complex style removed -->");
+            
+            // Convert relative URLs to absolute for images
+            if (baseUrl != null && !baseUrl.isEmpty()) {
+                try {
+                    URI baseUri = new URI(baseUrl);
+                    URL base = baseUri.toURL();
+                    String protocol = base.getProtocol();
+                    String host = base.getHost();
+                    int port = base.getPort();
+                    String baseUrlPrefix = protocol + "://" + host + (port > 0 && port != 80 && port != 443 ? ":" + port : "");
+                    
+                    // Fix relative image paths - more patterns
+                    html = html.replaceAll("(?i)(<img[^>]+src\\s*=\\s*[\"'])(/[^\"']+)([\"'])", 
+                                          "$1" + baseUrlPrefix + "$2$3");
+                    
+                    // Fix relative link paths
+                    html = html.replaceAll("(?i)(<a[^>]+href\\s*=\\s*[\"'])(/[^\"']+)([\"'])", 
+                                          "$1" + baseUrlPrefix + "$2$3");
+                    
+                    // Fix relative CSS/JS paths
+                    html = html.replaceAll("(?i)(<link[^>]+href\\s*=\\s*[\"'])(/[^\"']+)([\"'])", 
+                                          "$1" + baseUrlPrefix + "$2$3");
+                } catch (Exception e) {
+                    System.err.println("URL conversion error: " + e.getMessage());
+                }
+            }
+            
+            // Ensure proper structure
+            if (!html.toLowerCase().contains("<html")) {
+                html = "<html><head><meta charset=\"UTF-8\"></head><body>" + html + "</body></html>";
+            } else {
+                // Add charset if missing
+                if (!html.toLowerCase().contains("charset")) {
+                    html = html.replaceFirst("(?i)<head>", 
+                        "<head><meta charset=\"UTF-8\">");
+                }
+            }
+            
+            // Verify we didn't break the HTML completely
+            if (html.length() < 100 && original.length() > 1000) {
+                // We removed too much, return simplified version
+                return "<html><head><meta charset=\"UTF-8\"></head><body>" +
+                       "<h1>Content Loaded</h1>" +
+                       "<p>The page was loaded but automatic HTML cleaning removed too much content.</p>" +
+                       "<p><strong>URL:</strong> " + escapeHtml(baseUrl) + "</p>" +
+                       "<p><strong>Original size:</strong> " + original.length() + " bytes</p>" +
+                       "<hr><pre>" + escapeHtml(original.substring(0, Math.min(original.length(), 5000))) + "...</pre>" +
+                       "</body></html>";
+            }
+            
+            return html;
+            
+        } catch (Exception e) {
+            System.err.println("HTML preprocessing error: " + e.getMessage());
+            e.printStackTrace();
+            // Return original HTML if preprocessing fails
+            return html;
+        }
     }
     
     // Bookmark class

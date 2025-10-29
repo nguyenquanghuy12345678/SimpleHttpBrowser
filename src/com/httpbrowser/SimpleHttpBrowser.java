@@ -28,13 +28,17 @@ public class SimpleHttpBrowser extends JFrame {
         // Main tabbed pane
         mainTabbedPane = new JTabbedPane();
         
+        // Modern Web Browser Tab (NEW! - Best Quality)
+        ModernWebBrowser modernBrowser = new ModernWebBrowser();
+        mainTabbedPane.addTab("🌍 Modern Browser (BEST)", modernBrowser.getPanel());
+        
         // Web Browser Tab (NEW!)
         WebBrowser webBrowser = new WebBrowser();
-        mainTabbedPane.addTab("🌍 Web Browser", webBrowser);
+        mainTabbedPane.addTab("🌐 Classic Browser", webBrowser);
         
         // Web Client Tab (Advanced HTTP Client)
         webClient = new WebClient();
-        mainTabbedPane.addTab("� Advanced Client", webClient.getPanel());
+        mainTabbedPane.addTab("🔧 Advanced Client", webClient.getPanel());
         
         // Server Monitor Tab
         JPanel serverPanel = createServerMonitorPanel();
